@@ -47,6 +47,7 @@ public class Transform {
                 instructions.append(ins, afterInvokeInstructions);
             }
         }
+        return generateMethod;
     }
 
     private static boolean isInvokeReturnValue(Instruction instruction, ConstantPoolGen constantPool) {
