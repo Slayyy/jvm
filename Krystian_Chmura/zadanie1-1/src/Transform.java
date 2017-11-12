@@ -36,7 +36,10 @@ public class Transform {
         int tmpLocalIndex = generateMethod.getMaxLocals() - 1;
 
         final InstructionList instructions = generateMethod.getInstructionList();
-        for (InstructionHandle ins = instructions.getStart(); ins != null; ins = ins.getNext()) {
+
+        InstructionHandle nextIns = null;
+        for (InstructionHandle ins = instructions.getStart(); ins != null; ins = nextIns) {
+            nextIns = ins.getNext();
             Instruction instruction = ins.getInstruction();
             if (instruction instanceof InvokeInstruction && isInvokeReturnValue(instruction, constantPool)) {
                 InvokeInstruction invokeInstruction = (InvokeInstruction) instruction;
@@ -129,7 +132,4 @@ public class Transform {
     private static int getObjectClassFromConstantPool(ConstantPoolGen constantPool) {
         return constantPool.addClass(ObjectType.OBJECT);
     }
-
-
-
 }
