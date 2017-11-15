@@ -1,45 +1,28 @@
-import npj.generated.NPJLexer;
-import npj.generated.NPJParser;
+import generated.NPJLexer;
+import generated.NPJParser;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.TokenStream;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 
 public class Interpreter {
+    public static void main(String[] args) throws IOException {
+        final String file = args[0];
 
-    public static final String NPJ_HEAP_SIZE_PROPERTY = "npj.heap.size";
-    private final String programFile;
-    private final int heapSize;
-    private final int[] heap;
+        final int heapSize = Integer.valueOf(System.getProperty("npj.heap.size"));
+        if (heapSize % 8 != 1)
+            throw new RuntimeException("heapSize % 8 != 1");
 
-    public Interpreter(String programFile, int heapSize) {
-        this.programFile = programFile;
-        this.heapSize = heapSize;
-        this.heap = new int[heapSize];
-    }
+        final int[] heap = new int[heapSize];
 
-    public static void main(String[] args) {
-        new Interpreter(args[0], Integer.valueOf(System.getProperty(NPJ_HEAP_SIZE_PROPERTY))).run();
-    }
-
-    private NPJParser createParser() throws IOException {
-        NPJLexer lexer = new NPJLexer(new ANTLRInputStream(new FileInputStream(programFile)));
-        TokenStream tokens = new CommonTokenStream(lexer);
-        return new NPJParser(tokens);
-    }
-
-    public void run() {
-        NPJParser parser = null;
-        try {
-            parser = createParser();
-        } catch (IOException e) {
-            System.out.println("Cannot read " + programFile);
-            System.exit(1);
-        }
-        parser.addParseListener(new NPJInterpreter(new SemiSpaceCopyingMemory(heapSize), heap));
+        NPJParser parser = createParser(file);
+        parser.addParseListener(new ProgramInterpreter(new Memory(heapSize), heap));
         parser.program();
     }
 
+    private static NPJParser createParser(String file) throws IOException {
+        NPJLexer lexer = new NPJLexer(new ANTLRInputStream(new FileInputStream(file)));
+        return new NPJParser(new CommonTokenStream(lexer));
+    }
 }

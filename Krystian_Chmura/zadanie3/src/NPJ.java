@@ -1,31 +1,20 @@
-import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
-public class NPJ {
-    public static void print(String string) {
-        System.out.println(string);
-    }
-
-    public static void collect(int[] heap, Collector collector, Map<Object, Object> params) {
+class NPJ {
+    static void collect(int[] heap, Collector collector, Map<Object, Object> params) {
         collector.collect(heap, params);
     }
 
-    /*
-      typeTVariables - kolekcja wartosci pola "data" wszystkich zywych obiektow typu T
-      typeSVariables - kolekcja wartosci wszystkich zywych obiektow typu S
-    */
-    public static void heapAnalyze(Collection<Integer> typeTVariables, Collection<String> typeSVariables) {
-        print("");
-        print("Type T variables:");
-        for (int var : typeTVariables) {
-            print(String.valueOf(var));
+    static void heapAnalyze(List<VarPosToValue> tValues, List<VarPosToValue> sValues) {
+        System.out.println("-----------------HEAP ANALYZE-----------------");
+        System.out.println("T:");
+        for (VarPosToValue posToValue : tValues) {
+            System.out.format("\t%5d: %s\n", posToValue.pos, posToValue.val);
         }
-        print("=================");
-        print("Type S variables:");
-        for (String var : typeSVariables) {
-            print(var);
+        System.out.println("S:");
+        for (VarPosToValue posToValue : sValues) {
+            System.out.format("\t%5d: %s\n", posToValue.pos, posToValue.val);
         }
     }
-
-
 }

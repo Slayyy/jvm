@@ -1,4 +1,3 @@
-import com.sun.org.apache.xpath.internal.SourceTree;
 import generated.NPJBaseListener;
 import generated.NPJParser;
 
@@ -8,21 +7,21 @@ public class ProgramInterpreter extends NPJBaseListener {
 
     private final Memory memory;
     private final int[] heap;
-    private final HashMap<String, VariableInfo> nameToVariableInfo;
+    private final HashMap<String, VarInfo> varNameToInfo;
     private final String NULL_TEXT = "NULL";
 
     ProgramInterpreter(Memory memory, int[] heap) {
         this.memory = memory;
         this.heap = heap;
-        nameToVariableInfo = new HashMap<>();
+        varNameToInfo = new HashMap<>();
     }
 
     @Override
     public void exitVarDeclT(NPJParser.VarDeclTContext ctx) {
-        final int idx = memory.allocateT(heap, (Map) nameToVariableInfo);
+        final int idx = memory.allocateEmptyT(heap, (Map) varNameToInfo);
         final String name = ctx.STRING().getText();
-        final VariableInfo info = new VariableInfo(idx, Type.T);
-        nameToVariableInfo.put(name, info);
+        final VarInfo info = new VarInfo(idx, Constants.TCode);
+        varNameToInfo.put(name, info);
     }
 
     @Override
@@ -35,8 +34,8 @@ public class ProgramInterpreter extends NPJBaseListener {
     @Override
     public void exitVarDeclSNull(NPJParser.VarDeclSNullContext ctx) {
         final String name = ctx.STRING().getText();
-        final VariableInfo date = new VariableInfo(NPJConst.NULL_PTR, Type.S);
-        nameToVariableInfo.put(name, date);
+        final VarInfo date = new VarInfo(Constants.NULLPTR, Constants.SCode);
+        varNameToInfo.put(name, date);
     }
 
     @Override
@@ -53,35 +52,35 @@ public class ProgramInterpreter extends NPJBaseListener {
 
     @Override
     public void exitPrintStringConst(NPJParser.PrintStringConstContext ctx) {
-        final VariableInfo info = nameToVariableInfo.get(ctx.STRING().getText());
-        if (info.type != Type.S) {
+        final VarInfo info = varNameToInfo.get(ctx.STRING().getText());
+        if (info.code != Constants.SCode) {
             throw new RuntimeException("Could not print non-string value.");
         }
 
-        System.out.println(readString(info.idx));
+        System.out.println(readStringFromVarOnHeap(info.posAtHeap));
     }
 
     @Override
     public void exitCollect(NPJParser.CollectContext ctx) {
-        NPJ.collect(heap, memory, (Map) nameToVariableInfo);
+        NPJ.collect(heap, memory, (Map) varNameToInfo);
     }
 
     @Override
     public void exitAssignment(NPJParser.AssignmentContext ctx) {
-        final String lValue = ctx.lValue().getText();
-        final String rValue = ctx.rValue().getText();
-        final int leftIdx = getPosOfTReference(lValue);
-        if (NULL_TEXT.equals(rValue)) {
-            heap[leftIdx] = NPJConst.NULL_PTR;
+        final String lhs = ctx.lValue().getText();
+        final String rhs = ctx.rValue().getText();
+        final int lPos = getPosOfTReference(lhs);
+        if (NULL_TEXT.equals(rhs)) {
+            heap[lPos] = Constants.NULLPTR;
             return;
-        } else if (rValue.startsWith("\"")) {
-            allocateString(lValue, rValue.substring(1, rValue.length() - 1));
+        } else if (rhs.startsWith("\"")) {
+            allocateString(lhs, rhs.substring(1, rhs.length() - 1));
             return;
         }
         try {
-            heap[leftIdx] = Integer.parseInt(rValue);
+            heap[lPos] = Integer.parseInt(rhs);
         } catch (NumberFormatException nfe) {
-            heap[leftIdx] = getPosOfTReference(rValue);
+            heap[lPos] = getPosOfTReference(rhs);
         }
     }
 
@@ -90,45 +89,42 @@ public class ProgramInterpreter extends NPJBaseListener {
         final ArrayList<VarPosToValue> typeTVariables = new ArrayList<>();
         final ArrayList<VarPosToValue> typeSVariables = new ArrayList<>();
 
-        final int toSpaceIdx = memory.getCurrentHalfBeginPos();
-        int idx = toSpaceIdx;
-        while (idx < (toSpaceIdx + (heap.length / 2))) {
-            int code = heap[idx];
-            Type type = code < 0 ? Type.forCode(code) : null;
-            if (type != null) {
-                switch (type) {
-                    case S:
-                        typeSVariables.add(new VarPosToValue(idx, readString(idx)));
-                        idx += Type.S.baseSize + heap[idx + NPJConst.STRING_LENGTH_OFFSET] - 1;
-                        break;
-                    case T:
-                        typeTVariables.add(new VarPosToValue(idx, String.valueOf(heap[idx])));
-                        idx += 3;
-                }
+        int pos = memory.getCurrentHalfBeginPos();
+        while (pos < (memory.getCurrentHalfBeginPos() + (heap.length / 2))) {
+            switch (heap[pos]) {
+                case Constants.SCode:
+                    typeSVariables.add(new VarPosToValue(pos, readStringFromVarOnHeap(pos)));
+                    pos += Constants.SSize + heap[pos + 1] - 1;
+                    break;
+                case Constants.TCode:
+                    typeTVariables.add(new VarPosToValue(pos, String.valueOf(heap[pos + 3])));
+                    pos += 3;
+                    break;
+                default:
             }
-            idx++;
+            pos++;
         }
         NPJ.heapAnalyze(typeTVariables, typeSVariables);
     }
 
     private void allocateString(String name, String value) {
-        final int idx = memory.allocateS(heap, (Map) nameToVariableInfo, value.length());
+        final int pos = memory.allocateEmptyS(heap, (Map) varNameToInfo, value.length());
         for (int i = 0; i < value.length(); i++) {
-            heap[idx + Type.S.baseSize + i] = value.charAt(i);
+            heap[pos + Constants.SSize + i] = value.charAt(i);
         }
-        nameToVariableInfo.put(name, new VariableInfo(idx, Type.S));
+        varNameToInfo.put(name, new VarInfo(pos, Constants.SCode));
     }
 
-    private String readString(int idx) {
-        if (heap[idx] == NPJConst.NULL_PTR) {
+    private String readStringFromVarOnHeap(int pos) {
+        if (heap[pos] == Constants.NULLPTR) {
             return NULL_TEXT;
         }
 
-        final int length = heap[idx + NPJConst.STRING_LENGTH_OFFSET];
+        final int length = heap[pos + 1];
         final StringBuilder builder = new StringBuilder(length);
 
         for (int i = 0; i < length; i++)
-            builder.append((char) heap[idx + Type.S.baseSize + i]);
+            builder.append((char) heap[pos + Constants.SSize + i]);
 
         return builder.toString();
     }
@@ -136,25 +132,25 @@ public class ProgramInterpreter extends NPJBaseListener {
     private int getPosOfTReference(String value) {
         List<String> parts = Arrays.asList(value.split("\\."));
         Iterator<String> it = parts.iterator();
-        int idx = nameToVariableInfo.get(it.next()).idx;
+        int pos = varNameToInfo.get(it.next()).posAtHeap;
         while (it.hasNext()) {
             switch (it.next()) {
                 case "f1":
-                    idx += 1;
+                    pos += 1;
                     break;
                 case "f2":
-                    idx += 2;
+                    pos += 2;
                     break;
                 case "data":
-                    idx += 3;
+                    pos += 3;
                     break;
                 default:
                     throw new RuntimeException("invalid argument after dot operator");
             }
             if (it.hasNext()) {
-                idx = heap[idx];
+                pos = heap[pos];
             }
         }
-        return idx;
+        return pos;
     }
 }
